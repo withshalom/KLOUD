@@ -688,7 +688,7 @@ html, body { width:100%; height:100%; overflow:hidden; box-sizing:border-box; ba
   background: rgba(4,6,10,0.92);
   backdrop-filter: blur(6px);
   z-index: 900;
-  display: none; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   pointer-events: all;
 }
 #splash-dialog {
@@ -2314,16 +2314,20 @@ function splashSelectUnit(unit) {
 }
 
 function initSplash() {
-  // KLOUD — no unit splash, defaults to inches, defaults to light mode
-  unitMode = 'in';
-  const si = document.getElementById('unit-seg-in');
-  const sm = document.getElementById('unit-seg-mm');
-  if(si) si.classList.add('active');
-  if(sm) sm.classList.remove('active');
-  updateGridLabel();
-  // Ensure light mode is applied (theme init IIFE runs before DOM is ready
-  // on some browsers — re-apply here to be safe)
+  // KLOUD — show unit splash just like KAD standalone
+  // Light mode applied separately via theme IIFE
   if(typeof _applyTheme === 'function') _applyTheme(true);
+  document.getElementById('splash-year').textContent = new Date().getFullYear();
+  let saved = null;
+  try { saved = localStorage.getItem('kloud-unit'); } catch(e){}
+  if (saved === 'mm' || saved === 'in') {
+    document.getElementById('splash-overlay').style.display = 'none';
+    canvas.style.pointerEvents = 'auto';
+    if (saved !== unitMode) splashSelectUnit(saved);
+  } else {
+    // Show splash so user picks units
+    canvas.style.pointerEvents = 'none';
+  }
 }
 
 function toggleUnits() {
@@ -4071,7 +4075,14 @@ document.addEventListener('mousedown', e=>{
 function ctxCancelCommit() {
   closeCtxMenu();
   if(activeTool==='line'&&lineState.active){
-    lineState={active:false}; render(); return;
+    // Right-click "Commit Line" — commit whatever chain exists
+    if(lineChain.length>=2){
+      commitLineChain(false); // open polyline
+    } else {
+      lineState={active:false};
+      lineChain=[];
+    }
+    render(); return;
   }
   cancelTool(); render();
 }
