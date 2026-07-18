@@ -35,7 +35,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="copyright" content="Copyright (C) 2026 KADsuite / withshalom. Licensed under AGPL-3.0-or-later. KADsuite™, KAD™, KAM™, KUBIC™, KARVE™, KONSTRUCT™, KULTIVATE™, KODE™, KANVAS™, KONNECTOR™, KAMPUS™, KLOUD™, KID™, and KODEX™ are trademarks of withshalom / KADsuite. Forks must remain open source under AGPL. Trademarks not licensed by AGPL.">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>KLOUD — KADsuite in the Cloud · Alpha</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0c1824">
@@ -256,6 +256,9 @@ html, body { width:100%; height:100%; overflow:hidden; box-sizing:border-box; ba
 }
 #kommand-input {
   flex: 1;
+  min-width: 0; /* flex min-width defaults to auto: the long placeholder set a
+                   width floor and shoved the GO button past the pill edge on
+                   phones — this one line is the "cut off edges" fix */
   background: transparent;
   border: none;
   outline: none;
@@ -2754,6 +2757,58 @@ body.light-mode .tool-btn.active .tool-icon svg {
 }
 .mobile-mode #kommand-go-btn { display: flex; }
 
+/* ── MOBILE KOMMAND OVERFLOW HARDENING ──
+   Field report (Jayss): pill contents ran past the screen edge and the GO
+   button was unreachable. Cause: fixed-width crew (context button, KOMMAND
+   label, echo) plus an input that couldn't shrink below its placeholder.
+   On phones the label goes (the tool button is the pill's identity), the
+   echo truncates, and the pill honors device safe areas. */
+.mobile-mode #kommand-bar {
+  left:   calc(10px + env(safe-area-inset-left, 0px));
+  right:  calc(10px + env(safe-area-inset-right, 0px));
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+}
+.mobile-mode #kommand-label { display: none; }
+.mobile-mode #kommand-context { min-width: 0; }
+.mobile-mode #kommand-echo { max-width: 64px; text-overflow: ellipsis; }
+
+/* Topbar: the four-line brand subtitle ate half the bar on phones */
+.mobile-mode .brand { flex-shrink: 0; margin-right: 8px; }
+.mobile-mode .brand-sub { display: none; }
+
+/* Tab bar: clear the fixed ☰ sidebar button that covered "Model Space" */
+.mobile-mode .tab-bar { padding-left: 58px; }
+
+/* ── FLOATING COMMIT BUTTON ──
+   The touch Enter key. Appears only while an open line/polyline chain has
+   two or more points — the exact moment Enter would commit on desktop.
+   Rides above the KOMMAND pill and tracks the on-screen keyboard. */
+#commit-fab {
+  display: none;
+  position: fixed;
+  right:  calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px)); /* JS lifts this above the keyboard */
+  z-index: 221;
+  align-items: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--void);
+  font-family: var(--fu);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+  cursor: pointer;
+  transition: bottom 0.1s ease;
+}
+#commit-fab svg { width: 17px; height: 17px; flex-shrink: 0; }
+#commit-fab:active { transform: scale(0.96); }
+.mobile-mode #commit-fab.show { display: flex; }
+
 /* Canvas: hand touch gestures fully to our own JS handlers rather than
    fighting the browser's native scroll/pinch — required for clean pinch-zoom */
 .mobile-mode #main-canvas { touch-action: none; }
@@ -3429,6 +3484,14 @@ body.light-mode .tool-btn.active .tool-icon svg {
   </div>
 </div>
 
+<!-- Floating COMMIT — the touch Enter key. Shown by updateCommitFab()
+     (called from render) only in mobile mode while an open chain is
+     ready to commit. Same action as Enter / right-click "Commit Line". -->
+<button id="commit-fab" onclick="commitFabTap()" aria-label="Commit current line chain">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  COMMIT
+</button>
+
 <div id="statusbar">
   <div class="sb-item"><span>MODE</span><span class="sb-val act" id="sb-mode">PLINE</span></div>
   <div class="sb-item"><span>SNAP</span><span class="sb-val ok" id="sb-snap">ON</span></div>
@@ -3458,6 +3521,42 @@ body.light-mode .tool-btn.active .tool-icon svg {
 </div>
 
 </div><!-- end #app -->
+
+<!-- STARTUP UNIT SPLASH — mm / inch selection.
+     Markup is present in every KAD-family program; whether it SHOWS is
+     decided by each program's initSplash(). KAD inside KADsuite keeps it
+     suppressed (seamless click-through from the suite page); standalone
+     programs like KLOUD open with it. -->
+<div id="splash-overlay">
+  <div id="splash-dialog">
+    <div class="dlg-head">
+      <div class="splash-brand">KLOUD<span class="kloud-alpha-badge">ALPHA</span></div>
+      <div class="splash-sub">Select Working Units</div>
+    </div>
+    <div class="dlg-body">
+      <div class="splash-prompt">
+        Choose your <strong>working units</strong> for this drafting space.<br>
+        You can switch at any time from the topbar — geometry is never altered.
+      </div>
+      <div class="splash-unit-grid">
+        <button class="splash-unit-btn in-btn" onclick="splashSelectUnit('in')">
+          <span class="sub-unit">in</span>
+          <span class="sub-name">Inches</span>
+          <span class="sub-example">1/16&Prime; grid &middot; plasma / CNC</span>
+        </button>
+        <button class="splash-unit-btn mm-btn" onclick="splashSelectUnit('mm')">
+          <span class="sub-unit">mm</span>
+          <span class="sub-name">Millimeters</span>
+          <span class="sub-example">metric grid &middot; laser / mill</span>
+        </button>
+      </div>
+      <div class="splash-note">
+        Your choice is remembered in this browser.<br>
+        Internal storage is unit-independent — switching later never changes your drawing.
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -3836,11 +3935,25 @@ function splashSelectUnit(unit) {
 }
 
 function initSplash() {
-  // KADsuite — no unit splash, default inches for plasma workflow
+  // KLOUD — standalone program: open with the unit selection box, like
+  // every KAD-family program outside the suite. Default is INCHES; the
+  // splash lets the user confirm or switch to mm. A choice stored in this
+  // browser is applied silently on later visits and the splash is skipped.
   unitMode = 'in';
   document.getElementById('unit-seg-in').classList.add('active');
   document.getElementById('unit-seg-mm').classList.remove('active');
   updateGridLabel();
+  let saved = null;
+  try { saved = localStorage.getItem(SPLASH_KEY); } catch(e){}
+  if (saved === 'mm' || saved === 'in') {
+    // Returning user — apply remembered units without prompting
+    splashSelectUnit(saved);
+    return;
+  }
+  const splashEl = document.getElementById('splash-overlay');
+  splashEl.style.display = 'flex';
+  splashEl.style.pointerEvents = 'all';
+  canvas.style.pointerEvents = 'none';
 }
 
 function toggleUnits() {
@@ -4648,6 +4761,18 @@ function pickObject(sx,sy) {
         const b=worldToScreen(o.pts[(i+1)%n].x,o.pts[(i+1)%n].y);
         if(ptSegDist(sx,sy,a.x,a.y,b.x,b.y)<HIT_PX) return o;
       }
+    } else if(o.type==='CIRCLE'){
+      // Hit = click lands on the circumference ring (world-space test,
+      // tolerance converted from screen px so it feels the same at any zoom)
+      const w=screenToWorld(sx,sy), tol=HIT_PX/cam.zoom;
+      if(Math.abs(Math.hypot(w.x-o.cx,w.y-o.cy)-o.r)<tol) return o;
+    } else if(o.type==='ARC'){
+      // Ring distance first, then the click angle must lie on the sweep
+      const w=screenToWorld(sx,sy), tol=HIT_PX/cam.zoom;
+      if(Math.abs(Math.hypot(w.x-o.cx,w.y-o.cy)-o.r)<tol){
+        const a=Math.atan2(w.y-o.cy,w.x-o.cx);
+        if(angleOnArc(a,o.startA,o.endA,o.ccw)) return o;
+      }
     }
   }
   return null;
@@ -4713,9 +4838,20 @@ function normaliseAngle(deg) {
 function selectionCentroid() {
   let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
   for (const o of GeoMemory.objects) {
-    if (!selectedIds.has(o.id) || o.type !== 'LINE') continue;
-    x0=Math.min(x0,o.x1,o.x2); x1=Math.max(x1,o.x1,o.x2);
-    y0=Math.min(y0,o.y1,o.y2); y1=Math.max(y1,o.y1,o.y2);
+    if (!selectedIds.has(o.id)) continue;
+    if (o.type === 'LINE') {
+      x0=Math.min(x0,o.x1,o.x2); x1=Math.max(x1,o.x1,o.x2);
+      y0=Math.min(y0,o.y1,o.y2); y1=Math.max(y1,o.y1,o.y2);
+    } else if (o.type === 'POLYLINE') {
+      for (const p of o.pts) { x0=Math.min(x0,p.x); x1=Math.max(x1,p.x); y0=Math.min(y0,p.y); y1=Math.max(y1,p.y); }
+    } else if (o.type === 'CIRCLE') {
+      x0=Math.min(x0,o.cx-o.r); x1=Math.max(x1,o.cx+o.r);
+      y0=Math.min(y0,o.cy-o.r); y1=Math.max(y1,o.cy+o.r);
+    } else if (o.type === 'ARC') {
+      const bb=arcBBox(o.cx,o.cy,o.r,o.startA,o.endA,o.ccw);
+      x0=Math.min(x0,bb.minX); x1=Math.max(x1,bb.maxX);
+      y0=Math.min(y0,bb.minY); y1=Math.max(y1,bb.maxY);
+    }
   }
   if (!isFinite(x0)) return null;
   return { x:(x0+x1)/2, y:(y0+y1)/2 };
@@ -4735,7 +4871,7 @@ function rotatePoint(px, py, pivotX, pivotY, angleDeg) {
 // Apply rotation to all selected LINE objects in-place
 // deltaRad is in DEGREES already
 function rotateSelected(deltaDeg, pivot) {
-  if (selectedIds.size === 0) { showToast('Nothing selected — select lines first'); return; }
+  if (selectedIds.size === 0) { showToast('Nothing selected — select objects first'); return; }
   const p = pivot || selectionCentroid();
   if (!p) { showToast('No geometry to rotate'); return; }
 
@@ -4749,11 +4885,21 @@ function rotateSelected(deltaDeg, pivot) {
     } else if(o.type==='POLYLINE'){
       o.pts=o.pts.map(pt=>rotatePoint(pt.x,pt.y,p.x,p.y,deltaDeg));
       count++;
+    } else if(o.type==='CIRCLE'){
+      const nc=rotatePoint(o.cx,o.cy,p.x,p.y,deltaDeg);
+      o.cx=nc.x;o.cy=nc.y; count++;
+    } else if(o.type==='ARC'){
+      const nc=rotatePoint(o.cx,o.cy,p.x,p.y,deltaDeg);
+      const dRad=deltaDeg*Math.PI/180;
+      o.cx=nc.x;o.cy=nc.y;
+      o.startA=parseFloat(normAngle(o.startA+dRad).toFixed(8));
+      o.endA=parseFloat(normAngle(o.endA+dRad).toFixed(8));
+      count++;
     }
   }
   updateSelectionProps();
   render();
-  showToast(`Rotated ${count} line(s) by ${deltaDeg > 0 ? '+' : ''}${deltaDeg.toFixed(4)}°`);
+  showToast(`Rotated ${count} object(s) by ${deltaDeg > 0 ? '+' : ''}${deltaDeg.toFixed(4)}°`);
 }
 
 // applyRotationInput — called by the +Δ° and ABS buttons
@@ -5123,6 +5269,14 @@ function selBoxWindow(obj, lx, rx, by, ty) {
   if(obj.type==='POLYLINE'){
     return obj.pts.every(p=>p.x>=lx&&p.x<=rx&&p.y>=by&&p.y<=ty);
   }
+  if(obj.type==='CIRCLE'){
+    return obj.cx-obj.r>=lx&&obj.cx+obj.r<=rx&&
+           obj.cy-obj.r>=by&&obj.cy+obj.r<=ty;
+  }
+  if(obj.type==='ARC'){
+    const bb=arcBBox(obj.cx,obj.cy,obj.r,obj.startA,obj.endA,obj.ccw);
+    return bb.minX>=lx&&bb.maxX<=rx&&bb.minY>=by&&bb.maxY<=ty;
+  }
   return false;
 }
 
@@ -5140,6 +5294,35 @@ function selBoxCrossing(obj, lx, rx, by, ty) {
       if(segIntersectsBox(a.x,a.y,b.x,b.y,lx,rx,by,ty)) return true;
     }
     if(!obj.closed){const p=obj.pts[n-1];if(p.x>=lx&&p.x<=rx&&p.y>=by&&p.y<=ty) return true;}
+    return false;
+  }
+  if(obj.type==='CIRCLE'){
+    // Fully inside the box counts (crossing also selects contained objects)
+    if(obj.cx-obj.r>=lx&&obj.cx+obj.r<=rx&&obj.cy-obj.r>=by&&obj.cy+obj.r<=ty) return true;
+    // Otherwise the circumference itself must touch the box: nearest point
+    // of the rect within r AND farthest corner at/beyond r
+    const nx=Math.max(lx,Math.min(obj.cx,rx)), ny=Math.max(by,Math.min(obj.cy,ty));
+    const dNear=Math.hypot(obj.cx-nx,obj.cy-ny);
+    let dFar=0;
+    for(const[cx2,cy2] of [[lx,by],[lx,ty],[rx,by],[rx,ty]]){
+      dFar=Math.max(dFar,Math.hypot(obj.cx-cx2,obj.cy-cy2));
+    }
+    return dNear<=obj.r&&dFar>=obj.r;
+  }
+  if(obj.type==='ARC'){
+    // Sample the sweep as a fine polyline and reuse the segment/box tests —
+    // robust for every start/end/ccw combination
+    const STEPS=48;
+    const sweep=obj.ccw?normAngle(obj.endA-obj.startA):normAngle(obj.startA-obj.endA);
+    let px=obj.cx+obj.r*Math.cos(obj.startA), py=obj.cy+obj.r*Math.sin(obj.startA);
+    if(px>=lx&&px<=rx&&py>=by&&py<=ty) return true;
+    for(let i=1;i<=STEPS;i++){
+      const a=obj.ccw?obj.startA+sweep*i/STEPS:obj.startA-sweep*i/STEPS;
+      const qx=obj.cx+obj.r*Math.cos(a), qy=obj.cy+obj.r*Math.sin(a);
+      if(qx>=lx&&qx<=rx&&qy>=by&&qy<=ty) return true;
+      if(segIntersectsBox(px,py,qx,qy,lx,rx,by,ty)) return true;
+      px=qx; py=qy;
+    }
     return false;
   }
   return false;
@@ -5473,10 +5656,32 @@ function toggleToolsMenu() {
   openCtxMenu(rect.left, rect.top - 4);
 }
 
+// ── FLOATING COMMIT BUTTON (mobile "Enter") ────────────────────────────────
+// Visible exactly when Enter would commit: an open line/pline chain with at
+// least two points. render() runs after every state change, so it is the one
+// choke point that always knows the current chain state.
+function updateCommitFab() {
+  const fab = document.getElementById('commit-fab');
+  if (!fab) return;
+  const ready = activeTool==='line' && lineState.active && lineChain.length>=2;
+  fab.classList.toggle('show', ready);
+}
+function commitFabTap() {
+  if (activeTool==='line' && lineState.active && lineChain.length>=2) {
+    commitLineChain(false); // open polyline — same as Enter / "Commit Line"
+    render();
+  }
+}
+
 (function initMobileMode() {
   const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
   const small  = window.innerWidth <= 900;
-  if (coarse || small) document.body.classList.add('mobile-mode');
+  if (coarse || small) {
+    document.body.classList.add('mobile-mode');
+    // The desktop placeholder is a full syntax legend — far wider than a
+    // phone input. A compact prompt keeps the pill honest about its size.
+    document.getElementById('kommand-input').placeholder = '10,25 · @50,0 · @100<45°';
+  }
 
   // Tap-to-focus: the KOMMAND label and echo text are non-interactive —
   // on touch, taps landing there would never focus the input, so the
@@ -5501,7 +5706,10 @@ function toggleToolsMenu() {
       if (!document.body.classList.contains('mobile-mode')) return;
       const vv = window.visualViewport;
       const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      document.getElementById('kommand-bar').style.bottom = (overlap + 10) + 'px';
+      document.getElementById('kommand-bar').style.bottom =
+        overlap > 0 ? (overlap + 10) + 'px' : '';
+      const fab = document.getElementById('commit-fab');
+      if (fab) fab.style.bottom = overlap > 0 ? (overlap + 68) + 'px' : '';
     }
     window.visualViewport.addEventListener('resize', repositionKommand);
     window.visualViewport.addEventListener('scroll', repositionKommand);
@@ -6702,6 +6910,7 @@ function drawDimPreview() {
 }
 
 function render() {
+  updateCommitFab();
   const W=canvas.width, H=canvas.height;
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
